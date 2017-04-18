@@ -13,6 +13,13 @@
 - name: Include Variables For Specific Tomcat Version
   include_vars: "tomcat-{{ tomcat_version }}.yml"
 
+# Disable CentOS/RedHat 6 default firewall
+- name: Disable Firewall Service
+  service: name=iptables state=stopped enabled=no
+  when: >
+    (ansible_os_family == "RedHat")
+    and (ansible_distribution_major_version | int < 7)
+
 # Here We Create The Group and User
 - name: Create Tomcat Group
   group:
@@ -199,14 +206,22 @@
     src: tomcat.service.j2
     dest: /etc/systemd/system/tomcat.service
     mode: 0644
+  when: ansible_service_mgr == "systemd"
+
+- name: Install SysV Service
+  register: __tomcat_service
+  template:
+    src: tomcat.sysv.service.j2
+    dest: /etc/init.d/tomcat
+    mode: 0755
+  when: not ansible_service_mgr == "systemd"
 
 - name: Start Service
   register: __tomcat_start_service
-  systemd:
+  service:
     name: tomcat
     enabled: yes
     state: started
-    daemon_reload: yes
 
 - name: Wait for Manager to Unpack Before Placing New Context
   when:
